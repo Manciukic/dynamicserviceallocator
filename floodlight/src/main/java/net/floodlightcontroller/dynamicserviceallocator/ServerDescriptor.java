@@ -73,4 +73,14 @@ public class ServerDescriptor extends HostDescriptor{
         return macAddress;
     }
 
+    /**
+     * Check if two descriptors represent the same server.
+     * @param second the second descriptor
+     * @return true if they are equal.
+     */
+    public boolean equals(ServerDescriptor second) {
+        return second.getMacAddress().equals(getMacAddress()) ||
+                second.getIPAddress().equals(getIPAddress());
+    }
+
 }

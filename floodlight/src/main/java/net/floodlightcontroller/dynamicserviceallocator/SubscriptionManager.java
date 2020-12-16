@@ -278,5 +278,53 @@ public class SubscriptionManager {
         }
     }
 
+    /**
+     * Check if a server can be added to the pool without causing consistency issues.
+     * @param descriptor the descriptor of the candidate server.
+     * @return true if the new server can be added without issues.
+     */
+    private boolean checkServerConsistency(ServerDescriptor descriptor) {
+
+        for(ServerDescriptor server : servers) {
+            if(server.getIPAddress().equals(descriptor.getIPAddress()) ||
+                    server.getMacAddress().equals(descriptor.getMacAddress()))
+                return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Add a new server to the pool.
+     * @param newServer the descriptor of the new server.
+     * @return true if the server was added, false if a server with the same address is already present.
+     */
+    public boolean addServer(ServerDescriptor newServer) {
+        if(!checkServerConsistency(newServer))
+            return false;
+
+        servers.add(newServer);
+
+        return true;
+    }
+
+    /**
+     * Remove a server from the pool.
+     * @param oldServer the descriptor of the server to be removed.
+     * @return true if the server was removed. False if it does not exist.
+     */
+    public boolean removeServer(ServerDescriptor oldServer) {
+        Iterator<ServerDescriptor> i = servers.iterator();
+        while(i.hasNext()) {
+            if(i.next().equals(oldServer)) {
+                i.remove();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
 
 }
