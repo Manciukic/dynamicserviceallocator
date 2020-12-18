@@ -332,9 +332,35 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 			} 
 
 			sw.write(pob.build());
-		} 					
+		}
 	}
-	
+
+	private void uninstallRules(IOFSwitch sw, IPv4Address clientAddr, ServerDescriptor serverDes) {
+		
+		String serverMac = serverDes.getMacAddress().toString();//serverMAC[0];
+		String serverIp = serverDes.getIPAddress().toString();//serverIP[0];
+		
+		System.out.println(serverIp + "     " + serverMac);
+		
+		// Create a flow table modification message to add a rule
+		
+		OFFlowDelete.Builder fmb = sw.getOFFactory().buildFlowDelete();
+		buildForwardFlowMod(fmb, sw, clientAddr, serverDes);
+
+        System.out.println("Uninstall Forward route!");
+        
+        sw.write(fmb.build());
+        
+     	// Reverse Rule to change the source address and mask the action of the controller
+        
+        OFFlowDelete.Builder fmbRev = sw.getOFFactory().buildFlowDelete();
+		buildBackwardFlowMod(fmbRev, sw, clientAddr, serverDes);
+
+        System.out.println("Uninstall Backward route!");
+        
+        sw.write(fmbRev.build());
+	}
+
 	private void handleARPRequest(IOFSwitch sw, OFPacketIn pi,
 			FloodlightContext cntx) {
 
@@ -435,7 +461,18 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 	}
 	
 	public boolean unsubscribe(String clientId) {
-		return SubscriptionManager.unsubscribe(clientId);
+		ServerDescriptor server = SubscriptionManager.unsubscribe(clientId);
+		
+		if (server == null)
+			return false;
+		
+		IPv4Address clientAddr = IPv4Address.of(clientId);
+		
+		for (IOFSwitch sw:getAttachedSwitches(clientAddr)) {
+			uninstallRules(sw, clientAddr, server);
+		}
+		
+		return true;
 	}
 	
 	public void sendUnsubscribedError(IOFSwitch sw, OFPacketIn pi) {

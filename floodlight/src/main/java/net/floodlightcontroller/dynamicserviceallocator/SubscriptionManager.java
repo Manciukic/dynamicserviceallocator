@@ -109,9 +109,9 @@ public class SubscriptionManager {
      * Unsubscribe a client from the service.
      * @param clientID the client to be unsubscribed.
      */
-    public static boolean unsubscribe(String clientID) {
+    public static ServerDescriptor unsubscribe(String clientID) {
     	if(subscriptions.get(clientID) == null) 
-    		return false;
+    		return null;
         ServerDescriptor chosenOne = subscriptions.remove(clientID).getServer();
         chosenOne.unsubscribe();
 
@@ -121,7 +121,7 @@ public class SubscriptionManager {
             System.out.println("   Client: " + clientID);
             System.out.println();
         }
-        return true;
+        return chosenOne;
     }
 
     /**
