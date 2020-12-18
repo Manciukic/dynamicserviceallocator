@@ -168,7 +168,6 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 			return;
 		}
 
-
 		// Create a flow table modification message to add a rule
 		OFFlowAdd.Builder fmb = sw.getOFFactory().buildFlowAdd();
 
@@ -182,7 +181,8 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		Match.Builder mb = sw.getOFFactory().buildMatch();
 		mb.setExact(MatchField.ETH_TYPE, EthType.IPv4)
 				.setExact(MatchField.IPV4_DST, SERVICE_ALLOCATOR_IP)
-				.setExact(MatchField.ETH_DST, SERVICE_ALLOCATOR_MAC);
+				.setExact(MatchField.ETH_DST, SERVICE_ALLOCATOR_MAC)
+				.setExact(MatchField.IPV4_SRC, clientIP);
 
 		OFActions actions = sw.getOFFactory().actions();
 		// Create the actions (Change DST mac and IP addresses and set the out-port)
@@ -235,7 +235,8 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		Match.Builder mbRev = sw.getOFFactory().buildMatch();
 		mbRev.setExact(MatchField.ETH_TYPE, EthType.IPv4)
 				.setExact(MatchField.IPV4_SRC, serverDes.getIPAddress())
-				.setExact(MatchField.ETH_SRC, serverDes.getMacAddress());
+				.setExact(MatchField.ETH_SRC, serverDes.getMacAddress())
+				.setExact(MatchField.IPV4_DST, clientIP);
 
 		ArrayList<OFAction> actionListRev = new ArrayList<OFAction>();
 
