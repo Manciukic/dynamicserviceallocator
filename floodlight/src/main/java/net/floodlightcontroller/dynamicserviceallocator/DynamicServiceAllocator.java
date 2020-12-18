@@ -8,9 +8,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
+
+import javax.annotation.Nonnull;
 
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.action.*;
@@ -20,11 +25,16 @@ import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
 import org.projectfloodlight.openflow.types.*;
 import org.projectfloodlight.openflow.util.HexString;
 
+import ch.qos.logback.classic.Logger;
 import net.floodlightcontroller.core.*;
+import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.devicemanager.IDevice;
+import net.floodlightcontroller.devicemanager.IDeviceService;
+import net.floodlightcontroller.devicemanager.SwitchPort;
 import net.floodlightcontroller.forwarding.Forwarding;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
@@ -34,6 +44,7 @@ import net.floodlightcontroller.packet.TCP;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.routing.IRoutingDecision;
 import net.floodlightcontroller.util.FlowModUtils;
+import sun.rmi.runtime.Log;
 
 /**
  * @author student
@@ -41,6 +52,8 @@ import net.floodlightcontroller.util.FlowModUtils;
  */
 public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightModule, IDynServAllocatorREST {
 	protected IRestApiService restApiService;
+	protected IDeviceService deviceService;
+	protected IOFSwitchService switchService;
 	protected IFloodlightProviderService floodlightProvider;
 	
 	// IP and MAC address for our logical load balancer
@@ -377,8 +390,48 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		
 	}
 	
+	private Collection<IOFSwitch> getAttachedSwitches(IPv4Address deviceAddr){
+		// use a map to prevent duplicates
+		Map<DatapathId, IOFSwitch> switches = new HashMap<>();
+		
+		Iterator<? extends IDevice> devices = deviceService.queryDevices(
+				MacAddress.NONE, 
+				VlanVid.ZERO, 
+				deviceAddr, 
+				IPv6Address.NONE, 
+				DatapathId.NONE, 
+				OFPort.ZERO
+        );
+		
+		if (devices.hasNext()) {
+			IDevice device = devices.next();
+			for (SwitchPort swp:device.getAttachmentPoints()) {
+				if (!switches.containsKey(swp.getNodeId())) {
+					IOFSwitch sw = switchService.getActiveSwitch(swp.getNodeId());
+					if (sw != null) 
+						switches.put(swp.getNodeId(), sw);
+					else
+						System.out.println("No matching switch");
+				}
+				
+			}
+		} else {
+			System.out.println("No matching device found");
+			System.out.println(deviceService.getAllDevices());
+		}
+		
+		return switches.values();
+	}
+	
 	public SubscriptionWrapper subscribe(String clientId) {
-		return SubscriptionManager.subscribe(clientId);
+		SubscriptionWrapper sub = SubscriptionManager.subscribe(clientId);
+		IPv4Address clientAddr = IPv4Address.of(clientId);
+		
+		for (IOFSwitch sw:getAttachedSwitches(clientAddr)) {
+			installRules(sw, clientAddr, sub.getServer(), null);
+		}
+		
+		return sub;
 	}
 	
 	public boolean unsubscribe(String clientId) {
@@ -443,6 +496,8 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
 		l.add(IFloodlightProviderService.class);
 		l.add(IRestApiService.class);
+		l.add(IDeviceService.class);
+		l.add(IOFSwitchService.class);
 	    return l;
 	}
 
@@ -456,6 +511,8 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		// Create an empty MacAddresses set
 	    macAddresses = new ConcurrentSkipListSet<Long>();
+	    deviceService = context.getServiceImpl(IDeviceService.class);
+	    switchService = context.getServiceImpl(IOFSwitchService.class);
 	}
 
 	/* (non-Javadoc)
