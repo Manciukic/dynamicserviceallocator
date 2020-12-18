@@ -163,27 +163,12 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 			sendUnsubscribedError(sw, pi);
 			return;
 		}
-		
-		/*
-		// client is starting a new TCP connection
-		// check if it is a SYN packet
-		if(! (tcp.getFlags() == 0x02)) {
-			
-		}
-		*/
-		
-		/*if(! (ipv4.getProtocol() == IpProtocol.TCP)) {
-			return;
-		}*/
-		
-		String serverMac = serverDes.getMacAddress().toString();//serverMAC[0];
-		String serverIp = serverDes.getIPAddress().toString();//serverIP[0];
-		
-		System.out.println(serverIp + "     " + serverMac);
-		
-		// Create a flow table modification message to add a rule
-		OFFlowAdd.Builder fmb = sw.getOFFactory().buildFlowAdd();
-		
+
+		installRules(sw, clientIP, serverDes, pi);	
+	}
+	
+	private List<OFAction> buildForwardFlowMod(OFFlowMod.Builder fmb, IOFSwitch sw, IPv4Address clientAddr, 
+									ServerDescriptor serverDes) {
         fmb.setIdleTimeout(IDLE_TIMEOUT);
         fmb.setHardTimeout(HARD_TIMEOUT);
         fmb.setBufferId(OFBufferId.NO_BUFFER);
@@ -197,38 +182,109 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
         	.setExact(MatchField.IPV4_DST, SERVICE_ALLOCATOR_IP)
         	.setExact(MatchField.ETH_DST, SERVICE_ALLOCATOR_MAC);
         
-        OFActions actions = sw.getOFFactory().actions();
+        
         // Create the actions (Change DST mac and IP addresses and set the out-port)
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
         
-        OFOxms oxms = sw.getOFFactory().oxms();
+        if (!(fmb instanceof OFFlowDelete.Builder)){
+        	OFActions actions = sw.getOFFactory().actions();
+	        OFOxms oxms = sw.getOFFactory().oxms();
+	
+	        OFActionSetField setDlDst = actions.buildSetField()
+	        	    .setField(
+	        	        oxms.buildEthDst()
+	        	        .setValue(serverDes.getMacAddress())
+	        	        .build()
+	        	    )
+	        	    .build();
+	        actionList.add(setDlDst);
+	
+	        OFActionSetField setNwDst = actions.buildSetField()
+	        	    .setField(
+	        	        oxms.buildIpv4Dst()
+	        	        .setValue(serverDes.getIPAddress())
+	        	        .build()
+	        	    ).build();
+	        actionList.add(setNwDst);
+	        
+	        OFActionOutput output = actions.buildOutput()
+	        	    .setMaxLen(0xFFffFFff)
+	        	    .setPort(OFPort.TABLE)
+	        	    .build();
+	        actionList.add(output);
+	        
+	        
+	        fmb.setActions(actionList);
+	        fmb.setMatch(mb.build());
+        }
+        
+        return actionList;
+	}
+	
+	private List<OFAction> buildBackwardFlowMod(OFFlowMod.Builder fmb, IOFSwitch sw, IPv4Address clientAddr, 
+												ServerDescriptor serverDes) {
+		// Create a flow table modification message to add a rule
+ 		fmb.setIdleTimeout(IDLE_TIMEOUT);
+ 		fmb.setHardTimeout(HARD_TIMEOUT);
+ 		fmb.setBufferId(OFBufferId.NO_BUFFER);
+ 		fmb.setOutPort(OFPort.ANY);
+ 		fmb.setCookie(U64.of(0));
+ 		fmb.setPriority(FlowModUtils.PRIORITY_MAX);
 
-        OFActionSetField setDlDst = actions.buildSetField()
-        	    .setField(
-        	        oxms.buildEthDst()
-        	        .setValue(MacAddress.of(serverMac))//serverDes.getMACAddress().toString()))
-        	        .build()
-        	    )
-        	    .build();
-        actionList.add(setDlDst);
-
-        OFActionSetField setNwDst = actions.buildSetField()
-        	    .setField(
-        	        oxms.buildIpv4Dst()
-        	        .setValue(IPv4Address.of(serverIp))
-        	        .build()
-        	    ).build();
-        actionList.add(setNwDst);
-        
-        OFActionOutput output = actions.buildOutput()
-        	    .setMaxLen(0xFFffFFff)
-        	    .setPort(OFPort.TABLE)
-        	    .build();
-        actionList.add(output);
-        
-        
-        fmb.setActions(actionList);
-        fmb.setMatch(mb.build());
+         Match.Builder mbRev = sw.getOFFactory().buildMatch();
+         mbRev.setExact(MatchField.ETH_TYPE, EthType.IPv4)
+	         .setExact(MatchField.IPV4_SRC, serverDes.getIPAddress())
+	         .setExact(MatchField.ETH_SRC, serverDes.getMacAddress());
+             fmbRev.setActions(actionListRev);
+             fmbRev.setMatch(mbRev.build());
+             
+         ArrayList<OFAction> actionListRev = new ArrayList<OFAction>();
+         
+         if (!(fmb instanceof OFFlowDelete.Builder)){         
+        	 OFActions actions = sw.getOFFactory().actions();
+	         OFOxms oxms = sw.getOFFactory().oxms();
+	         
+	         OFActionSetField setDlDstRev = actions.buildSetField()
+	         	    .setField(
+	         	        oxms.buildEthSrc()
+	         	        .setValue(SERVICE_ALLOCATOR_MAC)
+	         	        .build()
+	         	    )
+	         	    .build();
+	         actionListRev.add(setDlDstRev);
+	
+	         OFActionSetField setNwDstRev = actions.buildSetField()
+	         	    .setField(
+	         	        oxms.buildIpv4Src()
+	         	        .setValue(SERVICE_ALLOCATOR_IP)
+	         	        .build()
+	         	    ).build();
+	         actionListRev.add(setNwDstRev);
+	         
+	         OFActionOutput outputRev = actions.buildOutput()
+	         	    .setMaxLen(0xFFffFFff)
+	         	    .setPort(OFPort.TABLE)
+	         	    .build();
+	         actionListRev.add(outputRev);
+	         
+	         fmb.setActions(actionListRev);
+	         fmb.setMatch(mbRev.build());
+         }
+         
+         return actionListRev;
+ 	}
+	
+	private void installRules(IOFSwitch sw, IPv4Address clientAddr, ServerDescriptor serverDes, OFPacketIn pi) {
+		
+		String serverMac = serverDes.getMacAddress().toString();//serverMAC[0];
+		String serverIp = serverDes.getIPAddress().toString();//serverIP[0];
+		
+		System.out.println(serverIp + "     " + serverMac);
+		
+		// Create a flow table modification message to add a rule
+		
+		OFFlowAdd.Builder fmb = sw.getOFFactory().buildFlowAdd();
+		List<OFAction> pcktoutActions = buildForwardFlowMod(fmb, sw, clientAddr, serverDes);
 
         System.out.println("Install Forward route!");
         
@@ -236,73 +292,34 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
         
      // Reverse Rule to change the source address and mask the action of the controller
         
-     		// Create a flow table modification message to add a rule
-     		OFFlowAdd.Builder fmbRev = sw.getOFFactory().buildFlowAdd();
-     		
-     		fmbRev.setIdleTimeout(IDLE_TIMEOUT);
-     		fmbRev.setHardTimeout(HARD_TIMEOUT);
-     		fmbRev.setBufferId(OFBufferId.NO_BUFFER);
-     		fmbRev.setOutPort(OFPort.ANY);
-     		fmbRev.setCookie(U64.of(0));
-     		fmbRev.setPriority(FlowModUtils.PRIORITY_MAX);
+        OFFlowAdd.Builder fmbRev = sw.getOFFactory().buildFlowAdd();
+		buildBackwardFlowMod(fmbRev, sw, clientAddr, serverDes);
 
-             Match.Builder mbRev = sw.getOFFactory().buildMatch();
-             mbRev.setExact(MatchField.ETH_TYPE, EthType.IPv4)
-             .setExact(MatchField.IPV4_SRC, IPv4Address.of(serverIp))
-             .setExact(MatchField.ETH_SRC, MacAddress.of(serverMac));
-             
-             ArrayList<OFAction> actionListRev = new ArrayList<OFAction>();
-             
-             OFActionSetField setDlDstRev = actions.buildSetField()
-             	    .setField(
-             	        oxms.buildEthSrc()
-             	        .setValue(SERVICE_ALLOCATOR_MAC)
-             	        .build()
-             	    )
-             	    .build();
-             actionListRev.add(setDlDstRev);
+        System.out.println("Install Backward route!");
+        
+        sw.write(fmbRev.build());
 
-             OFActionSetField setNwDstRev = actions.buildSetField()
-             	    .setField(
-             	        oxms.buildIpv4Src()
-             	        .setValue(SERVICE_ALLOCATOR_IP)
-             	        .build()
-             	    ).build();
-             actionListRev.add(setNwDstRev);
-             
-             OFActionOutput outputRev = actions.buildOutput()
-             	    .setMaxLen(0xFFffFFff)
-             	    .setPort(OFPort.TABLE)
-             	    .build();
-             actionListRev.add(outputRev);
-             
-             fmbRev.setActions(actionListRev);
-             fmbRev.setMatch(mbRev.build());
-             
-             sw.write(fmbRev.build());
+         // If we do not apply the same action to the packet we have received and we send it back the first packet will be lost
+        
+        if (pi != null) {
+	 		// Create the Packet-Out and set basic data for it (buffer id and in port)
+	 		OFPacketOut.Builder pob = sw.getOFFactory().buildPacketOut();
+	 		pob.setBufferId(pi.getBufferId());
+	 		pob.setInPort(OFPort.ANY);
+	     		
+	 		// Assign the action
+	 		pob.setActions(pcktoutActions);
+			
+			// Packet might be buffered in the switch or encapsulated in Packet-In 
+			// If the packet is encapsulated in Packet-In sent it back
+			if (pi.getBufferId() == OFBufferId.NO_BUFFER) {
+				// Packet-In buffer-id is none, the packet is encapsulated -> send it back
+	            byte[] packetData = pi.getData();
+	            pob.setData(packetData);
+			} 
 
-             // If we do not apply the same action to the packet we have received and we send it back the first packet will be lost
-             
-     		// Create the Packet-Out and set basic data for it (buffer id and in port)
-     		OFPacketOut.Builder pob = sw.getOFFactory().buildPacketOut();
-     		pob.setBufferId(pi.getBufferId());
-     		pob.setInPort(OFPort.ANY);
-     		
-     		// Assign the action
-     		pob.setActions(actionList);
-		
-		// Packet might be buffered in the switch or encapsulated in Packet-In 
-		// If the packet is encapsulated in Packet-In sent it back
-		if (pi.getBufferId() == OFBufferId.NO_BUFFER) {
-			// Packet-In buffer-id is none, the packet is encapsulated -> send it back
-            byte[] packetData = pi.getData();
-            pob.setData(packetData);
-		} 
-				
-		System.out.println("Install Reverse route!");
-		
-		sw.write(pob.build());
-		
+			sw.write(pob.build());
+		} 					
 	}
 	
 	private void handleARPRequest(IOFSwitch sw, OFPacketIn pi,
