@@ -180,7 +180,8 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
         Match.Builder mb = sw.getOFFactory().buildMatch();
         mb.setExact(MatchField.ETH_TYPE, EthType.IPv4)
         	.setExact(MatchField.IPV4_DST, SERVICE_ALLOCATOR_IP)
-        	.setExact(MatchField.ETH_DST, SERVICE_ALLOCATOR_MAC);
+        	.setExact(MatchField.ETH_DST, SERVICE_ALLOCATOR_MAC)
+        	.setExact(MatchField.IPV4_SRC, clientAddr);
         
         
         // Create the actions (Change DST mac and IP addresses and set the out-port)
@@ -234,10 +235,9 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
          Match.Builder mbRev = sw.getOFFactory().buildMatch();
          mbRev.setExact(MatchField.ETH_TYPE, EthType.IPv4)
 	         .setExact(MatchField.IPV4_SRC, serverDes.getIPAddress())
-	         .setExact(MatchField.ETH_SRC, serverDes.getMacAddress());
-             fmbRev.setActions(actionListRev);
-             fmbRev.setMatch(mbRev.build());
-             
+	         .setExact(MatchField.ETH_SRC, serverDes.getMacAddress())
+	         .setExact(MatchField.IPV4_DST, clientAddr);
+         
          ArrayList<OFAction> actionListRev = new ArrayList<OFAction>();
          
          if (!(fmb instanceof OFFlowDelete.Builder)){         
