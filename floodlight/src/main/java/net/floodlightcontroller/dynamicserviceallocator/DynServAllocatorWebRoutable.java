@@ -18,6 +18,8 @@ public class DynServAllocatorWebRoutable implements RestletRoutable{
         // Subscribe a client
         router.attach("/client/subscribe", SubscribeClient.class);
         router.attach("/client/unsubscribe", UnsubscribeClient.class);
+        router.attach("/server/subscribe", SubscribeServer.class);
+        router.attach("/server/unsubscribe", UnsubscribeServer.class);
         return router;
     }
     

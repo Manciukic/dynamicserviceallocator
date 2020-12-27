@@ -3,6 +3,8 @@ package net.floodlightcontroller.dynamicserviceallocator;
 import java.io.IOException;
 import java.util.Map;
 
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.MacAddress;
 import org.restlet.data.Status;
 import org.restlet.resource.Post;
 import org.restlet.resource.ServerResource;
@@ -16,7 +18,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * Once subscribed, the client will be assigned a server to handle its 
  * requests.
  */
-public class SubscribeClient extends ServerResource {
+public class SubscribeServer extends ServerResource {
 
 	@Post("json")
 	public String subscribe(String fmJson) {
@@ -28,29 +30,32 @@ public class SubscribeClient extends ServerResource {
         }
 		
 		// Parse the JSON input
-		
+		System.out.println("ci provo");
 		ObjectMapper mapper = new ObjectMapper();
 		try {
 			
 			JsonNode root = mapper.readTree(fmJson);
 			
-			JsonNode addrNode = root.get("client_address");
+			JsonNode addrNode = root.get("server_address");
+			JsonNode macaddrNode = root.get("server_macaddress");
+			JsonNode port = root.get("service_port");
 
-			if (addrNode == null){
+			if (addrNode == null || macaddrNode == null){
 				setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
-				return new String("No 'client_address' field provided");
+				return new String("No 'server_address', 'server_macaddress' or 'service_port' fields provided");
 			}
 			
-			// Get the client IP
-			String client = addrNode.asText();
+			// Get Server IP
+			IPv4Address serverIP = IPv4Address.of(addrNode.asText());
+			MacAddress serverMAC = MacAddress.of(macaddrNode.asText());
+			int servicePort = port.asInt();
+			ServerDescriptor servDes = new ServerDescriptor(serverIP, serverMAC, servicePort);
+			
 			
 			IDynServAllocatorREST dsa = (IDynServAllocatorREST) getContext().getAttributes().get(IDynServAllocatorREST.class.getCanonicalName());
-			SubscriptionWrapper clientWrapper = dsa.subscribe(client);
-			if(clientWrapper == null) {
-				return new String(" { \"successful_subscription\":\"no\",\"description\":  \"no servers are available\"} ");
-			}
-			
-			return new String( " { \"successful_subscription\":\"yes\",\"lease_time\": " + clientWrapper.getLeaseTime() + " } ");
+			dsa.addServer(servDes);
+
+			return new String("OK");
 
 		} catch (IOException e) {
 			e.printStackTrace();

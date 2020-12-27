@@ -60,8 +60,8 @@ public class SubscriptionManager {
                 MacAddress.of("00:00:00:00:00:04")
         };
 
-        servers.add(new ServerDescriptor(ips[0], macs[0], 5201));
-        servers.add(new ServerDescriptor(ips[1], macs[1], 5201));
+        //servers.add(new ServerDescriptor(ips[0], macs[0], 5201));
+        //servers.add(new ServerDescriptor(ips[1], macs[1], 5201));
 
         if(verboseMode) {
             System.out.println("Subscription Service has started. Initial servers are ->");
@@ -89,7 +89,12 @@ public class SubscriptionManager {
     	    unsubscribe(clientID);
     	
         ServerDescriptor chosenOne = getLeastBusy();
+        // Probably no servers are available
+        if(chosenOne == null) {
+        	return null;
+        }
         chosenOne.subscribe();
+        System.out.println("aggiungo client");
         SubscriptionWrapper sub = new SubscriptionWrapper(chosenOne, defaultLeaseTime);
         subscriptions.put(clientID, sub);
 
@@ -283,7 +288,7 @@ public class SubscriptionManager {
      * @param descriptor the descriptor of the candidate server.
      * @return true if the new server can be added without issues.
      */
-    private boolean checkServerConsistency(ServerDescriptor descriptor) {
+    private static boolean checkServerConsistency(ServerDescriptor descriptor) {
 
         for(ServerDescriptor server : servers) {
             if(server.getIPAddress().equals(descriptor.getIPAddress()) ||
@@ -299,10 +304,11 @@ public class SubscriptionManager {
      * @param newServer the descriptor of the new server.
      * @return true if the server was added, false if a server with the same address is already present.
      */
-    public boolean addServer(ServerDescriptor newServer) {
+    public static boolean addServer(ServerDescriptor newServer) {
         if(!checkServerConsistency(newServer))
             return false;
 
+        System.out.println("aggiungo server");
         servers.add(newServer);
 
         return true;
@@ -313,7 +319,7 @@ public class SubscriptionManager {
      * @param oldServer the descriptor of the server to be removed.
      * @return true if the server was removed. False if it does not exist.
      */
-    public boolean removeServer(ServerDescriptor oldServer) {
+    public static boolean removeServer(ServerDescriptor oldServer) {
         Iterator<ServerDescriptor> i = servers.iterator();
         while(i.hasNext()) {
             if(i.next().equals(oldServer)) {

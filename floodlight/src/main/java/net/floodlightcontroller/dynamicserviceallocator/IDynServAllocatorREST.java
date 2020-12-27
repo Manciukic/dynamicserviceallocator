@@ -15,4 +15,6 @@ import net.floodlightcontroller.util.ConcurrentCircularBuffer;
 public interface IDynServAllocatorREST extends IFloodlightService {
 	public SubscriptionWrapper subscribe(String client);
 	public boolean unsubscribe(String client);
+	public boolean addServer(ServerDescriptor newServer);
+	public boolean removeServer(ServerDescriptor oldServer);
 }
