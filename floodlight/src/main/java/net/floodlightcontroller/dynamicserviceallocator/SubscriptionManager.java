@@ -308,7 +308,13 @@ public class SubscriptionManager {
         if(!checkServerConsistency(newServer))
             return false;
 
-        System.out.println("aggiungo server");
+        if(verboseMode) {
+            System.out.println();
+            System.out.println("A server has been added to the pool ->");
+            System.out.println("    IP address: " + newServer.getIPAddress().toString());
+            System.out.println();
+        }
+
         servers.add(newServer);
 
         return true;
@@ -323,6 +329,12 @@ public class SubscriptionManager {
         Iterator<ServerDescriptor> i = servers.iterator();
         while(i.hasNext()) {
             if(i.next().equals(oldServer)) {
+                if(verboseMode) {
+                    System.out.println();
+                    System.out.println("A server has been removed from the pool ->");
+                    System.out.println("    IP address: " + oldServer.getIPAddress().toString());
+                    System.out.println();
+                }
                 i.remove();
                 return true;
             }
