@@ -27,8 +27,13 @@ A ready-to-use GNS3 project implemented using the tutorial in the next section i
 in the local repository. For the sake of simplicity, it requires Floodlight running 
 on the same host running GNS3. To make it work, follow these simple steps:
 
-1. Open the project with GNS3.
-2. Run the following commands on the host running both GNS3 and Floodlight:
+1. Build three Docker images using the ones in local repository:
+    1. `ovs_anaws` using OVS Docker image.
+    2. `web-server` using Web server Docker image.
+    3. `web-client` using Web client Docker image.
+   
+2. Open the project with GNS3.
+3. Run the following commands on the host running both GNS3 and Floodlight:
 ```
 ip addr add 192.168.1.1/24 dev gns3-tap0
 ip link set gns3-tap0 up
