@@ -48,7 +48,7 @@ ip route add 192.168.0.0/24 via 192.168.1.1
     switches 2, 3 and 4 together (leaf and spine topology).
 4. Create a new Cloud and add `gns3-tap0` (in case floodlight is on the same VM as GNS3), `enp3s0`
    (in case GNS3 is in a VM) or `vboxnet0`
-   (in case GNS3 is running on your PC) to the available interfaces). Connect switch 1 (spine switch)
+   (in case GNS3 is running on your PC) to the available interfaces. Connect switch 1 (spine switch)
    to this new interface on the Cloud.
     Tip: you may need to enable "Show special Ethernet interfaces".
 5. Configure `LOOPBACK_ADDR` environment variable for the OVS switches. This address 
@@ -121,7 +121,7 @@ SERVICE_PORT=80
 
 ## User manual
 Web clients run a CLI which lets users subscribe and perform requests on the virtual service.
-Here is shown the help menu of this interface:
+Here is shown the menu of this interface:
 
 ```
 Welcome to the DSA client service. Here is a list of the available commands:
@@ -133,7 +133,7 @@ quit -> quit this client
 help -> to see this menu
 
 To use the 'get' command, the user should first subscribe, otherwise the DSA will return an error message.
-
+>_
 ```
 
 Web servers are simple alpine containers running an apache httpd daemon. Since DSA supports also servers
