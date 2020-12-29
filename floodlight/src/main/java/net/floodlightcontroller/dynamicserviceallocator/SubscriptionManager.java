@@ -47,21 +47,21 @@ public class SubscriptionManager {
 
         verboseMode = verbose;
 
-        
+        /*
         //Uncomment this to use pre-set servers
         IPv4Address[] ips = {
-        		IPv4Address.of("192.168.0.2"),
                 IPv4Address.of("192.168.0.3"),
-                IPv4Address.of("192.168.0.4")
+                IPv4Address.of("192.168.0.8")
         };
         MacAddress[] macs = {
-        		MacAddress.of("00:00:00:00:00:02"),
                 MacAddress.of("00:00:00:00:00:03"),
-                MacAddress.of("00:00:00:00:00:04")
+                MacAddress.of("00:00:00:00:00:08")
         };
 
-        //servers.add(new ServerDescriptor(ips[0], macs[0], 5201));
-        //servers.add(new ServerDescriptor(ips[1], macs[1], 5201));
+        addServer(new ServerDescriptor(ips[0], macs[0], 80));
+        addServer(new ServerDescriptor(ips[1], macs[1], 80));
+
+		*/
 
         if(verboseMode) {
             System.out.println("Subscription Service has started. Initial servers are ->");
@@ -70,7 +70,7 @@ public class SubscriptionManager {
 
         initPeriodicCleansingTask(cleansingPeriod);
         if(verboseMode) {
-           System.out.println("Initialized cleansing scheduler with period = " + cleansingPeriod + " seconds");
+            System.out.println("Initialized cleansing scheduler with period = " + cleansingPeriod + " seconds");
         }
     }
 
@@ -85,13 +85,13 @@ public class SubscriptionManager {
      * @return An object containing the server to which the client has been subscribed and the lease duration
      */
     public static SubscriptionWrapper subscribe(String clientID) {
-    	if(isSubscribed(clientID))
-    	    unsubscribe(clientID);
-    	
+        if(isSubscribed(clientID))
+            unsubscribe(clientID);
+
         ServerDescriptor chosenOne = getLeastBusy();
         // Probably no servers are available
         if(chosenOne == null) {
-        	return null;
+            return null;
         }
         chosenOne.subscribe();
         System.out.println("aggiungo client");
@@ -115,8 +115,8 @@ public class SubscriptionManager {
      * @param clientID the client to be unsubscribed.
      */
     public static boolean unsubscribe(String clientID) {
-    	if(subscriptions.get(clientID) == null) 
-    		return false;
+        if(subscriptions.get(clientID) == null)
+            return false;
         ServerDescriptor chosenOne = subscriptions.remove(clientID).getServer();
         chosenOne.unsubscribe();
 
@@ -144,7 +144,7 @@ public class SubscriptionManager {
      * @return The server paired with the specified client. Return null if the client is not subscribed.
      */
     public static ServerDescriptor getSubscriptionServer(String clientID) {
-    	SubscriptionWrapper sub = subscriptions.get(clientID);
+        SubscriptionWrapper sub = subscriptions.get(clientID);
         return (sub == null)? null:sub.getServer();
     }
 
@@ -239,9 +239,9 @@ public class SubscriptionManager {
     private static ServerDescriptor getLeastBusy() {
 
         Optional<ServerDescriptor> temp =  servers.stream().min
-                                            (
-                                                Comparator.comparingInt(ServerDescriptor::getSubscribers)
-                                            );
+                (
+                        Comparator.comparingInt(ServerDescriptor::getSubscribers)
+                );
         return temp.orElse(null);
 
     }
@@ -327,20 +327,37 @@ public class SubscriptionManager {
      */
     public static boolean removeServer(ServerDescriptor oldServer) {
         Iterator<ServerDescriptor> i = servers.iterator();
+        boolean foundIt = false;
         while(i.hasNext()) {
             if(i.next().equals(oldServer)) {
+
+                i.remove();
+
                 if(verboseMode) {
                     System.out.println();
                     System.out.println("A server has been removed from the pool ->");
                     System.out.println("    IP address: " + oldServer.getIPAddress().toString());
                     System.out.println();
                 }
-                i.remove();
-                return true;
+
+                foundIt = true;
+                break;
             }
         }
 
-        return false;
+        if(foundIt) {
+            //move all subscriptions of that server to another server
+            for(Map.Entry<String, SubscriptionWrapper> sub: subscriptions.entrySet()) {
+                if(sub.getValue().getServer().equals(oldServer)) {
+                    ServerDescriptor chosenOne = getLeastBusy();
+                    sub.getValue().setServer(chosenOne);
+                    chosenOne.subscribe();
+                    oldServer.unsubscribe();
+                }
+            }
+        }
+
+        return foundIt;
     }
 
 

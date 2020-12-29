@@ -23,18 +23,18 @@ public class UnsubscribeServer extends ServerResource {
 
 	@Post("json")
 	public String subscribe(String fmJson) {
-	    
-        // Check if the payload is provided
-        if(fmJson == null){
+
+		// Check if the payload is provided
+		if(fmJson == null){
 			setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
-            return new String("Empty payload");
-        }
-		
+			return new String("Empty payload");
+		}
+
 		// Parse the JSON input
-		
+
 		ObjectMapper mapper = new ObjectMapper();
 		try {
-			
+
 			JsonNode root = mapper.readTree(fmJson);
 
 			JsonNode addrNode = root.get("server_address");
@@ -45,20 +45,20 @@ public class UnsubscribeServer extends ServerResource {
 				setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
 				return new String("No 'server_address', 'server_macaddress' or 'service_port' fields provided");
 			}
-			
+
 			// Get Server IP
 			IPv4Address serverIP = IPv4Address.of(addrNode.asText());
 			MacAddress serverMAC = MacAddress.of(macaddrNode.asText());
 			int servicePort = port.asInt();
 			ServerDescriptor servDes = new ServerDescriptor(serverIP, serverMAC, servicePort);
-			
+
 			IDynServAllocatorREST dsa = (IDynServAllocatorREST) getContext().getAttributes().get(IDynServAllocatorREST.class.getCanonicalName());
-			
+
 			if (dsa.removeServer(servDes)){
 				return new String("OK");
 			} else {
 				setStatus(Status.CLIENT_ERROR_NOT_FOUND);
-				return new String("Client was not subscribed");
+				return new String("Server was not subscribed");
 			}
 
 		} catch (IOException e) {

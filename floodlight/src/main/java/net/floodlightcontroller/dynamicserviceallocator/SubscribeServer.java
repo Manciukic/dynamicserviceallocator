@@ -22,20 +22,20 @@ public class SubscribeServer extends ServerResource {
 
 	@Post("json")
 	public String subscribe(String fmJson) {
-	    
-        // Check if the payload is provided
-        if(fmJson == null){
-        	setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
-            return new String("Empty payload");
-        }
-		
+
+		// Check if the payload is provided
+		if(fmJson == null){
+			setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
+			return new String("Empty payload");
+		}
+
 		// Parse the JSON input
-		System.out.println("ci provo");
+		//System.out.println("ci provo"); //DEBUG
 		ObjectMapper mapper = new ObjectMapper();
 		try {
-			
+
 			JsonNode root = mapper.readTree(fmJson);
-			
+
 			JsonNode addrNode = root.get("server_address");
 			JsonNode macaddrNode = root.get("server_macaddress");
 			JsonNode port = root.get("service_port");
@@ -44,18 +44,21 @@ public class SubscribeServer extends ServerResource {
 				setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
 				return new String("No 'server_address', 'server_macaddress' or 'service_port' fields provided");
 			}
-			
+
 			// Get Server IP
 			IPv4Address serverIP = IPv4Address.of(addrNode.asText());
 			MacAddress serverMAC = MacAddress.of(macaddrNode.asText());
 			int servicePort = port.asInt();
 			ServerDescriptor servDes = new ServerDescriptor(serverIP, serverMAC, servicePort);
-			
-			
-			IDynServAllocatorREST dsa = (IDynServAllocatorREST) getContext().getAttributes().get(IDynServAllocatorREST.class.getCanonicalName());
-			dsa.addServer(servDes);
 
-			return new String("OK");
+
+			IDynServAllocatorREST dsa = (IDynServAllocatorREST) getContext().getAttributes().get(IDynServAllocatorREST.class.getCanonicalName());
+			if(dsa.addServer(servDes))
+				return new String("OK");
+
+			//If addServer returns false then it means that a server with the same IP address was found in the pool
+			setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
+			return new String("This server was already registered");
 
 		} catch (IOException e) {
 			e.printStackTrace();

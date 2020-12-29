@@ -8,7 +8,7 @@ import java.sql.Timestamp;
  */
 public class SubscriptionWrapper {
 
-    private final ServerDescriptor server;
+    private ServerDescriptor server;
     private final int leaseTime;
     private final Timestamp expirationTime;
 
@@ -26,6 +26,11 @@ public class SubscriptionWrapper {
     //this method will be package-private since other packages won't need to access the server of a subscription
     ServerDescriptor getServer() {
         return server;
+    }
+
+    //this method will be package-private since other packages won't need to access the server of a subscription
+    void setServer(ServerDescriptor server) {
+        this.server = server;
     }
 
     public int getLeaseTime() {

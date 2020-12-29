@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package net.floodlightcontroller.dynamicserviceallocator;
 
@@ -28,8 +28,10 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.forwarding.Forwarding;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.ICMP;
 import net.floodlightcontroller.packet.IPacket;
 import net.floodlightcontroller.packet.IPv4;
+import net.floodlightcontroller.packet.PacketParsingException;
 import net.floodlightcontroller.packet.TCP;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.routing.IRoutingDecision;
@@ -42,328 +44,379 @@ import net.floodlightcontroller.util.FlowModUtils;
 public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightModule, IDynServAllocatorREST {
 	protected IRestApiService restApiService;
 	protected IFloodlightProviderService floodlightProvider;
-	
+
 	// IP and MAC address for our logical load balancer
 	private final static IPv4Address SERVICE_ALLOCATOR_IP = IPv4Address.of("9.9.9.9");
 	private final static MacAddress SERVICE_ALLOCATOR_MAC =  MacAddress.of("00:00:00:00:00:fe");
-	
+
 	// Rule timeouts
 	private final static short IDLE_TIMEOUT = 10; // in seconds
 	private final static short HARD_TIMEOUT = 20; // every 20 seconds drop the entry
 
 	static String[] serverIP = {
-		"192.168.0.3",
-		"192.168.0.7"
+			"192.168.0.3",
+			"192.168.0.7"
 	};
-	
+
 	static String[] serverMAC = {
-		"00:00:00:00:00:03",
-		"32:1b:51:e3:a0:95"
+			"00:00:00:00:00:03",
+			"32:1b:51:e3:a0:95"
 	};
-		
+
 	// Counter
 	static int counter = 0;
-	
+
 	// Set of MacAddresses seen
 	protected Set macAddresses;
 
-	
+
 	/* (non-Javadoc)
 	 * @see net.floodlightcontroller.core.IOFMessageListener#receive(net.floodlightcontroller.core.IOFSwitch, org.projectfloodlight.openflow.protocol.OFMessage, net.floodlightcontroller.core.FloodlightContext)
 	 */
 	@Override
 	public net.floodlightcontroller.core.IListener.Command receive(IOFSwitch sw, OFMessage msg,
-			FloodlightContext cntx) {
-			
-			Ethernet eth = IFloodlightProviderService.bcStore.get(cntx,
-                IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
-			
-			IPacket pkt = eth.getPayload();
+																   FloodlightContext cntx) {
 
-			// Print the source MAC address
+		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx,
+				IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+
+		IPacket pkt = eth.getPayload();
+
+		// Print the source MAC address
 			/*Long sourceMACHash = Ethernet.toLong(eth.getSourceMACAddress().getBytes());
 			System.out.printf("MAC Address: {%s} seen on switch: {%s}\n",
 				HexString.toHexString(sourceMACHash),
 				sw.getId());*/
-			
-			// Cast to Packet-In
-			OFPacketIn pi = (OFPacketIn) msg;
 
-	        // Dissect Packet included in Packet-In
-			if (eth.isBroadcast() || eth.isMulticast()) {
-				if (pkt instanceof ARP) {
-					
-					System.out.printf("Processing ARP request\n");
-					
-					ARP arpRequest = (ARP) eth.getPayload();
-					
-					if( arpRequest.getTargetProtocolAddress().compareTo(SERVICE_ALLOCATOR_IP) == 0 ){
-					
-						System.out.println("sono ennnntraoto");
-						// Process ARP request
-						handleARPRequest(sw, pi, cntx);
-						
-						// Interrupt the chain
-						return Command.STOP;
-					}
-				}
-			} else {
-				if (pkt instanceof IPv4 || false) {
-					
-					System.out.println("Ho visto un pacchetto con questo IP di destinazione: " + ((IPv4) pkt).getDestinationAddress());
-					
-					if(((IPv4) pkt).getDestinationAddress().compareTo(SERVICE_ALLOCATOR_IP) == 0) {
-					
-						
-						System.out.printf("Processing IPv4 packet\n");
-						
-						handleIPPacket(sw, pi, cntx);
-							
-						// Interrupt the chain
-						return Command.STOP;
-					}
+		// Cast to Packet-In
+		OFPacketIn pi = (OFPacketIn) msg;
+
+		// Dissect Packet included in Packet-In
+		if (eth.isBroadcast() || eth.isMulticast()) {
+			if (pkt instanceof ARP) {
+
+				System.out.printf("Processing ARP request\n");
+
+				ARP arpRequest = (ARP) eth.getPayload();
+
+				if( arpRequest.getTargetProtocolAddress().compareTo(SERVICE_ALLOCATOR_IP) == 0 ){
+
+					System.out.println("sono ennnntraoto");
+					// Process ARP request
+					handleARPRequest(sw, pi, cntx);
+
+					// Interrupt the chain
+					return Command.STOP;
 				}
 			}
-			
-			// Continue the chain
-			return Command.CONTINUE;
+		} else {
+			if (pkt instanceof IPv4 || false) {
+
+				System.out.println("Ho visto un pacchetto con questo IP di destinazione: " + ((IPv4) pkt).getDestinationAddress());
+
+				if(((IPv4) pkt).getDestinationAddress().compareTo(SERVICE_ALLOCATOR_IP) == 0) {
+
+
+					System.out.printf("Processing IPv4 packet\n");
+
+					handleIPPacket(sw, pi, cntx);
+
+					// Interrupt the chain
+					return Command.STOP;
+				}
+			}
+		}
+
+		// Continue the chain
+		return Command.CONTINUE;
 
 	}
-	
+
 	/**
-     * Handle IP packet that generated the Packet IN: assign server to client and manage virtual IP.
-     * 
-     * @param sw switch that generated the packet IN
-     * @param pi generated packet IN
-     * @param cntx
-     */
+	 * Handle IP packet that generated the Packet IN: assign server to client and manage virtual IP.
+	 *
+	 * @param sw switch that generated the packet IN
+	 * @param pi generated packet IN
+	 * @param cntx
+	 */
 	private void handleIPPacket(IOFSwitch sw, OFPacketIn pi,
-			FloodlightContext cntx) {
-		
+								FloodlightContext cntx) {
+
 		// Double check that the payload is IPv4
 		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx,
 				IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
-		
+
 		if (! (eth.getEtherType() == EthType.IPv4))
 			return;
-		
+
 		// Cast the IP packet
 		IPv4 ipv4 = (IPv4) eth.getPayload();
-		
+
 		// Extract MAC, IP addresses and initialize a new Client Descriptor
 
 		MacAddress clientMAC = eth.getSourceMACAddress();
 		IPv4Address clientIP = ipv4.getSourceAddress();
-		
+
 		ClientDescriptor clientDes = new ClientDescriptor(clientIP);//, clientMAC);
-		
+
 		ServerDescriptor serverDes;
-		
+
 		// Check if client is subscribed if not, sends back an error to the client
 		// Return the Descriptor of the server that will handle all requests received from that specific client
-		/*if((serverDes = SubscriptionManager.getSubscriptionServer(clientDes.toString())) == null) {
-			sendUnsubscribedError(sw, pi);
+		if((serverDes = SubscriptionManager.getSubscriptionServer(clientDes.toString())) == null) {
+			sendUnsubscribedError(sw, pi, cntx);
 			return;
-		}*/
-		
-		String serverMac = serverMAC[0];//serverDes.getMacAddress().toString();//serverMAC[0];
-		String serverIp = serverIP[0];//serverDes.getIPAddress().toString();//serverIP[0];
-		
+		}
+
+
 		// Create a flow table modification message to add a rule
 		OFFlowAdd.Builder fmb = sw.getOFFactory().buildFlowAdd();
-		
-        fmb.setIdleTimeout(IDLE_TIMEOUT);
-        fmb.setHardTimeout(HARD_TIMEOUT);
-        fmb.setBufferId(OFBufferId.NO_BUFFER);
-        fmb.setCookie(U64.of(0));
-        fmb.setPriority(FlowModUtils.PRIORITY_MAX);
 
-        // Create the match structure  
-        Match.Builder mb = sw.getOFFactory().buildMatch();
-        mb.setExact(MatchField.ETH_TYPE, EthType.IPv4)
-        	.setExact(MatchField.IPV4_DST, SERVICE_ALLOCATOR_IP)
-        	.setExact(MatchField.ETH_DST, SERVICE_ALLOCATOR_MAC);
-        
-        OFActions actions = sw.getOFFactory().actions();
-        // Create the actions (Change DST mac and IP addresses and set the out-port)
-        ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-        
-        OFOxms oxms = sw.getOFFactory().oxms();
+		fmb.setIdleTimeout(IDLE_TIMEOUT);
+		fmb.setHardTimeout(HARD_TIMEOUT);
+		fmb.setBufferId(OFBufferId.NO_BUFFER);
+		fmb.setCookie(U64.of(0));
+		fmb.setPriority(FlowModUtils.PRIORITY_MAX);
 
-        OFActionSetField setDlDst = actions.buildSetField()
-        	    .setField(
-        	        oxms.buildEthDst()
-        	        .setValue(MacAddress.of(serverMac))//serverDes.getMACAddress().toString()))
-        	        .build()
-        	    )
-        	    .build();
-        actionList.add(setDlDst);
+		// Create the match structure
+		Match.Builder mb = sw.getOFFactory().buildMatch();
+		mb.setExact(MatchField.ETH_TYPE, EthType.IPv4)
+				.setExact(MatchField.IPV4_DST, SERVICE_ALLOCATOR_IP)
+				.setExact(MatchField.ETH_DST, SERVICE_ALLOCATOR_MAC);
 
-        OFActionSetField setNwDst = actions.buildSetField()
-        	    .setField(
-        	        oxms.buildIpv4Dst()
-        	        .setValue(IPv4Address.of(serverIp))
-        	        .build()
-        	    ).build();
-        actionList.add(setNwDst);
-        
-        OFActionOutput output = actions.buildOutput()
-        	    .setMaxLen(0xFFffFFff)
-        	    .setPort(OFPort.TABLE)
-        	    .build();
-        actionList.add(output);
-        
-        
-        fmb.setActions(actionList);
-        fmb.setMatch(mb.build());
+		OFActions actions = sw.getOFFactory().actions();
+		// Create the actions (Change DST mac and IP addresses and set the out-port)
+		ArrayList<OFAction> actionList = new ArrayList<OFAction>();
 
-        System.out.println("Install Forward route!");
-        
-        sw.write(fmb.build());
-        
-        // Reverse Rule to change the source address and mask the action of the controller
-        
-        // Create a flow table modification message to add a rule
- 		OFFlowAdd.Builder fmbRev = sw.getOFFactory().buildFlowAdd();
- 		
- 		fmbRev.setIdleTimeout(IDLE_TIMEOUT);
- 		fmbRev.setHardTimeout(HARD_TIMEOUT);
- 		fmbRev.setBufferId(OFBufferId.NO_BUFFER);
- 		fmbRev.setCookie(U64.of(0));
- 		fmbRev.setPriority(FlowModUtils.PRIORITY_MAX);
+		OFOxms oxms = sw.getOFFactory().oxms();
 
-         Match.Builder mbRev = sw.getOFFactory().buildMatch();
-         mbRev.setExact(MatchField.ETH_TYPE, EthType.IPv4)
-         .setExact(MatchField.IPV4_SRC, IPv4Address.of(serverIp))
-         .setExact(MatchField.ETH_SRC, MacAddress.of(serverMac));
-         
-         ArrayList<OFAction> actionListRev = new ArrayList<OFAction>();
-         
-         OFActionSetField setDlDstRev = actions.buildSetField()
-         	    .setField(
-         	        oxms.buildEthSrc()
-         	        .setValue(SERVICE_ALLOCATOR_MAC)
-         	        .build()
-         	    )
-         	    .build();
-         actionListRev.add(setDlDstRev);
+		OFActionSetField setDlDst = actions.buildSetField()
+				.setField(
+						oxms.buildEthDst()
+								.setValue(serverDes.getMacAddress())
+								.build()
+				)
+				.build();
+		actionList.add(setDlDst);
 
-         OFActionSetField setNwDstRev = actions.buildSetField()
-         	    .setField(
-         	        oxms.buildIpv4Src()
-         	        .setValue(SERVICE_ALLOCATOR_IP)
-         	        .build()
-         	    ).build();
-         actionListRev.add(setNwDstRev);
-         
-         OFActionOutput outputRev = actions.buildOutput()
-         	    .setMaxLen(0xFFffFFff)
-         	    .setPort(OFPort.TABLE)
-         	    .build();
-         actionListRev.add(outputRev);
-         
-         fmbRev.setActions(actionListRev);
-         fmbRev.setMatch(mbRev.build());
-         
-         sw.write(fmbRev.build());
+		OFActionSetField setNwDst = actions.buildSetField()
+				.setField(
+						oxms.buildIpv4Dst()
+								.setValue(serverDes.getIPAddress())
+								.build()
+				).build();
+		actionList.add(setNwDst);
 
-         // If we do not apply the same action to the packet we have received and we send it back the first packet will be lost
-         
- 		// Create the Packet-Out and set basic data for it (buffer id and in port)
- 		OFPacketOut.Builder pob = sw.getOFFactory().buildPacketOut();
- 		pob.setBufferId(pi.getBufferId());
- 		pob.setInPort(OFPort.ANY);
- 		
- 		// Assign the action
- 		pob.setActions(actionList);		
-		
-		// Packet might be buffered in the switch or encapsulated in Packet-In 
+		OFActionOutput output = actions.buildOutput()
+				.setMaxLen(0xFFffFFff)
+				.setPort(OFPort.TABLE)
+				.build();
+		actionList.add(output);
+
+
+		fmb.setActions(actionList);
+		fmb.setMatch(mb.build());
+
+		System.out.println("Install Forward route!");
+
+		sw.write(fmb.build());
+
+		// Reverse Rule to change the source address and mask the action of the controller
+
+		// Create a flow table modification message to add a rule
+		OFFlowAdd.Builder fmbRev = sw.getOFFactory().buildFlowAdd();
+
+		fmbRev.setIdleTimeout(IDLE_TIMEOUT);
+		fmbRev.setHardTimeout(HARD_TIMEOUT);
+		fmbRev.setBufferId(OFBufferId.NO_BUFFER);
+		fmbRev.setCookie(U64.of(0));
+		fmbRev.setPriority(FlowModUtils.PRIORITY_MAX);
+
+		Match.Builder mbRev = sw.getOFFactory().buildMatch();
+		mbRev.setExact(MatchField.ETH_TYPE, EthType.IPv4)
+				.setExact(MatchField.IPV4_SRC, serverDes.getIPAddress())
+				.setExact(MatchField.ETH_SRC, serverDes.getMacAddress());
+
+		ArrayList<OFAction> actionListRev = new ArrayList<OFAction>();
+
+		OFActionSetField setDlDstRev = actions.buildSetField()
+				.setField(
+						oxms.buildEthSrc()
+								.setValue(SERVICE_ALLOCATOR_MAC)
+								.build()
+				)
+				.build();
+		actionListRev.add(setDlDstRev);
+
+		OFActionSetField setNwDstRev = actions.buildSetField()
+				.setField(
+						oxms.buildIpv4Src()
+								.setValue(SERVICE_ALLOCATOR_IP)
+								.build()
+				).build();
+		actionListRev.add(setNwDstRev);
+
+		OFActionOutput outputRev = actions.buildOutput()
+				.setMaxLen(0xFFffFFff)
+				.setPort(OFPort.TABLE)
+				.build();
+		actionListRev.add(outputRev);
+
+		fmbRev.setActions(actionListRev);
+		fmbRev.setMatch(mbRev.build());
+
+		sw.write(fmbRev.build());
+
+		// If we do not apply the same action to the packet we have received and we send it back the first packet will be lost
+
+		// Create the Packet-Out and set basic data for it (buffer id and in port)
+		OFPacketOut.Builder pob = sw.getOFFactory().buildPacketOut();
+		pob.setBufferId(pi.getBufferId());
+		pob.setInPort(OFPort.ANY);
+
+		// Assign the action
+		pob.setActions(actionList);
+
+		// Packet might be buffered in the switch or encapsulated in Packet-In
 		// If the packet is encapsulated in Packet-In sent it back
 		if (pi.getBufferId() == OFBufferId.NO_BUFFER) {
 			// Packet-In buffer-id is none, the packet is encapsulated -> send it back
-            byte[] packetData = pi.getData();
-            pob.setData(packetData);
-		} 
-				
+			byte[] packetData = pi.getData();
+			pob.setData(packetData);
+		}
+
 		System.out.println("Install Reverse route!");
-		
+
 		sw.write(pob.build());
-		
+
 	}
-	
+
 	/**
-     * Handle ARP requests to the Virtual interface.
-     * @param sw switch that generated the packet IN
-     * @param pi generated packet IN
-     * @param cntx
-     */
+	 * Handle ARP requests to the Virtual interface.
+	 * @param sw switch that generated the packet IN
+	 * @param pi generated packet IN
+	 * @param cntx
+	 */
 	private void handleARPRequest(IOFSwitch sw, OFPacketIn pi,
-			FloodlightContext cntx) {
+								  FloodlightContext cntx) {
 
 		// Double check that the payload is ARP
 		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx,
 				IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
-		
+
 		if (! (eth.getPayload() instanceof ARP))
 			return;
-		
+
 		// Cast the ARP request
 		ARP arpRequest = (ARP) eth.getPayload();
-				
+
 		// Generate ARP reply
 		IPacket arpReply = new Ethernet()
-			.setSourceMACAddress(SERVICE_ALLOCATOR_MAC)
-			.setDestinationMACAddress(eth.getSourceMACAddress())
-			.setEtherType(EthType.ARP)
-			.setPriorityCode(eth.getPriorityCode())
-			.setPayload(
-				new ARP()
-				.setHardwareType(ARP.HW_TYPE_ETHERNET)
-				.setProtocolType(ARP.PROTO_TYPE_IP)
-				.setHardwareAddressLength((byte) 6)
-				.setProtocolAddressLength((byte) 4)
-				.setOpCode(ARP.OP_REPLY)
-				.setSenderHardwareAddress(SERVICE_ALLOCATOR_MAC) // Set my MAC address
-				.setSenderProtocolAddress(SERVICE_ALLOCATOR_IP) // Set my IP address
-				.setTargetHardwareAddress(arpRequest.getSenderHardwareAddress())
-				.setTargetProtocolAddress(arpRequest.getSenderProtocolAddress()));
-		
+				.setSourceMACAddress(SERVICE_ALLOCATOR_MAC)
+				.setDestinationMACAddress(eth.getSourceMACAddress())
+				.setEtherType(EthType.ARP)
+				.setPriorityCode(eth.getPriorityCode())
+				.setPayload(
+						new ARP()
+								.setHardwareType(ARP.HW_TYPE_ETHERNET)
+								.setProtocolType(ARP.PROTO_TYPE_IP)
+								.setHardwareAddressLength((byte) 6)
+								.setProtocolAddressLength((byte) 4)
+								.setOpCode(ARP.OP_REPLY)
+								.setSenderHardwareAddress(SERVICE_ALLOCATOR_MAC) // Set my MAC address
+								.setSenderProtocolAddress(SERVICE_ALLOCATOR_IP) // Set my IP address
+								.setTargetHardwareAddress(arpRequest.getSenderHardwareAddress())
+								.setTargetProtocolAddress(arpRequest.getSenderProtocolAddress()));
+
 		// Create the Packet-Out and set basic data for it (buffer id and in port)
 		OFPacketOut.Builder pob = sw.getOFFactory().buildPacketOut();
 		pob.setBufferId(OFBufferId.NO_BUFFER);
 		pob.setInPort(OFPort.ANY);
-		
+
 		// Create action -> send the packet back from the source port
 		OFActionOutput.Builder actionBuilder = sw.getOFFactory().actions().buildOutput();
-		// The method to retrieve the InPort depends on the protocol version 
+		// The method to retrieve the InPort depends on the protocol version
 		OFPort inPort = pi.getMatch().get(MatchField.IN_PORT);
-		actionBuilder.setPort(inPort); 
-		
+		actionBuilder.setPort(inPort);
+
 		// Assign the action
 		pob.setActions(Collections.singletonList((OFAction) actionBuilder.build()));
-		
-		// Set the ARP reply as packet data 
+
+		// Set the ARP reply as packet data
 		byte[] packetData = arpReply.serialize();
 		pob.setData(packetData);
-		
+
 		System.out.printf("Sending out ARP reply\n");
-		
+
 		sw.write(pob.build());
-		
+
 	}
-	
+
 	public SubscriptionWrapper subscribe(String clientId) {
 		return SubscriptionManager.subscribe(clientId);
 	}
-	
+
 	public boolean unsubscribe(String clientId) {
 		return SubscriptionManager.unsubscribe(clientId);
 	}
-	
-	public void sendUnsubscribedError(IOFSwitch sw, OFPacketIn pi) {
-		//TODO
+
+	public void sendUnsubscribedError(IOFSwitch sw, OFPacketIn pi, FloodlightContext cntx) {
+
+		System.out.println("A client just tried to get the service without subscribing!");
+
+		// Double check that the payload is IPV4
+		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx,
+				IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+
+		if (! (eth.getPayload() instanceof IPv4))
+			return;
+
+		IPv4 ip_payload = (IPv4) eth.getPayload();
+
+
+		// Generate ICMP destination unreachable reply
+		IPacket icmp_reply = new Ethernet()
+				.setSourceMACAddress(SERVICE_ALLOCATOR_MAC)
+				.setDestinationMACAddress(eth.getSourceMACAddress())
+				.setEtherType(EthType.IPv4)
+				.setPriorityCode(eth.getPriorityCode())
+				.setPayload(
+						new IPv4()
+								.setSourceAddress(SERVICE_ALLOCATOR_IP)
+								.setDestinationAddress(ip_payload.getSourceAddress())
+								.setProtocol(IpProtocol.ICMP)
+								.setTtl((byte)64)
+								.setPayload(
+										new ICMP()
+												.setIcmpType(ICMP.DESTINATION_UNREACHABLE)
+												.setIcmpCode((byte)1) //host unreachable
+												/*
+												 * ICMP Destination Unreachable must have as payload the full IPv4 header of the original packet
+												 * plus at least the first 64 bits of its payload
+												 */
+												.setPayload(
+														ip_payload
+												)
+								)
+				);
+
+		//build pkt out
+		OFPacketOut.Builder pob = sw.getOFFactory().buildPacketOut();
+		pob.setBufferId(OFBufferId.NO_BUFFER);
+		pob.setInPort(OFPort.ANY);
+
+		//set output action
+		OFActionOutput.Builder actionBuilder = sw.getOFFactory().actions().buildOutput();
+		OFPort inPort = pi.getMatch().get(MatchField.IN_PORT);
+		actionBuilder.setPort(inPort);
+		pob.setActions(Collections.singletonList((OFAction) actionBuilder.build()));
+
+		//set pkt data
+		pob.setData(icmp_reply.serialize());
+
+		sw.write(pob.build());
 	}
-	
+
 	/* (non-Javadoc)
 	 * @see net.floodlightcontroller.core.IListener#getName()
 	 */
@@ -409,7 +462,7 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		m.put(IDynServAllocatorREST.class, this);
 		return m;
 	}
-	 
+
 	/* (non-Javadoc)
 	 * @see net.floodlightcontroller.core.module.IFloodlightModule#getModuleDependencies()
 	 */
@@ -418,7 +471,7 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
 		l.add(IFloodlightProviderService.class);
 		l.add(IRestApiService.class);
-	    return l;
+		return l;
 	}
 
 	/* (non-Javadoc)
@@ -430,7 +483,7 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		SubscriptionManager.init(50, true);
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		// Create an empty MacAddresses set
-	    macAddresses = new ConcurrentSkipListSet<Long>();
+		macAddresses = new ConcurrentSkipListSet<Long>();
 	}
 
 	/* (non-Javadoc)
@@ -444,7 +497,6 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 
 	@Override
 	public boolean addServer(ServerDescriptor newServer) {
-		System.out.println("continuo a provarci");
 		return SubscriptionManager.addServer(newServer);
 	}
 
