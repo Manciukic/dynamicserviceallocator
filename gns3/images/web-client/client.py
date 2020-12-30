@@ -12,12 +12,18 @@ url = 'http://' + controller_ip + ':8080/dsa/client/'
 def subscribe():
     headers = {'Content-Type': 'application/json'}
     payload = '{"client_address": "' + this_ip + '"}'
-    return requests.post(url + "subscribe", data=payload, headers=headers).json()
+    try:
+        return requests.post(url + "subscribe", data=payload, headers=headers).json()
+    except Exception as e:
+        return {'successful_subscription': 'no', 'description': str(e)}
 
 def unsubscribe():
     headers = {'Content-Type': 'application/json', 'Accept-Charset': 'UTF-8'}
     payload = '{"client_address": "' + this_ip + '"}'
-    return requests.post(url + "unsubscribe", data=payload, headers=headers).text
+    try:
+        return requests.post(url + "unsubscribe", data=payload, headers=headers).text
+    except Exception as e:
+        return str(e)
 
 def get_service():
     try:
@@ -46,7 +52,7 @@ while True:
     elif cmd=="sub":
         response = subscribe()
         if response['successful_subscription'] == 'yes':
-            print("Correctly subscribed for " + response['lease_time'] + " seconds!")
+            print(f"Correctly subscribed for {response['lease_time']} seconds!")
         else:
             print('Error: ' + response['description'])
     elif cmd=="unsub":
