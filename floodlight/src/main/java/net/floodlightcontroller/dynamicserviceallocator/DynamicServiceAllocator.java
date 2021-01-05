@@ -181,7 +181,6 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		Match.Builder mb = sw.getOFFactory().buildMatch();
 		mb.setExact(MatchField.ETH_TYPE, EthType.IPv4)
 				.setExact(MatchField.IPV4_DST, SERVICE_ALLOCATOR_IP)
-				.setExact(MatchField.ETH_DST, SERVICE_ALLOCATOR_MAC)
 				.setExact(MatchField.IPV4_SRC, clientIP);
 
 		OFActions actions = sw.getOFFactory().actions();
