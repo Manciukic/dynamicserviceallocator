@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -21,10 +22,12 @@ import org.projectfloodlight.openflow.types.*;
 import org.projectfloodlight.openflow.util.HexString;
 
 import net.floodlightcontroller.core.*;
+import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.core.util.AppCookie;
 import net.floodlightcontroller.forwarding.Forwarding;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Ethernet;
@@ -44,6 +47,9 @@ import net.floodlightcontroller.util.FlowModUtils;
 public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightModule, IDynServAllocatorREST {
 	protected IRestApiService restApiService;
 	protected IFloodlightProviderService floodlightProvider;
+	protected IOFSwitchService switchService;
+
+	public static final long APP_ID = 97L;
 
 	// IP and MAC address for our logical load balancer
 	private final static IPv4Address SERVICE_ALLOCATOR_IP = IPv4Address.of("9.9.9.9");
@@ -168,13 +174,16 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 			return;
 		}
 
+		SubscriptionManager.addAttachedSwitch(clientDes.toString(), sw.getId());
+
 		// Create a flow table modification message to add a rule
 		OFFlowAdd.Builder fmb = sw.getOFFactory().buildFlowAdd();
 
 		fmb.setIdleTimeout(IDLE_TIMEOUT);
 		fmb.setHardTimeout(HARD_TIMEOUT);
 		fmb.setBufferId(OFBufferId.NO_BUFFER);
-		fmb.setCookie(U64.of(0));
+		fmb.setCookie(AppCookie.makeCookie(APP_ID, clientIP.getInt()));
+		fmb.setCookieMask(U64.of(0xffffffffffffffffL));
 		fmb.setPriority(FlowModUtils.PRIORITY_MAX);
 
 		// Create the match structure
@@ -228,7 +237,8 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		fmbRev.setIdleTimeout(IDLE_TIMEOUT);
 		fmbRev.setHardTimeout(HARD_TIMEOUT);
 		fmbRev.setBufferId(OFBufferId.NO_BUFFER);
-		fmbRev.setCookie(U64.of(0));
+		fmb.setCookie(AppCookie.makeCookie(APP_ID, clientIP.getInt()));
+		fmb.setCookieMask(U64.of(0xffffffffffffffffL));
 		fmbRev.setPriority(FlowModUtils.PRIORITY_MAX);
 
 		Match.Builder mbRev = sw.getOFFactory().buildMatch();
@@ -288,7 +298,19 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		System.out.println("Install Reverse route!");
 
 		sw.write(pob.build());
+	}
 
+	private void deleteIPFlows(IOFSwitch sw, IPv4Address clientAddr, ServerDescriptor serverDes) {
+
+		// Create a flow table modification message to add a rule
+
+		OFFlowDelete.Builder fmb = sw.getOFFactory().buildFlowDelete();
+		fmb.setCookie(AppCookie.makeCookie(APP_ID, clientAddr.getInt()));
+		fmb.setCookieMask(U64.of(0xffffffffffffffffL));
+
+		System.out.println("Uninstall routes!");
+
+		sw.write(fmb.build());
 	}
 
 	/**
@@ -357,7 +379,21 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 	}
 
 	public boolean unsubscribe(String clientId) {
-		return SubscriptionManager.unsubscribe(clientId);
+		SubscriptionWrapper subwrap = SubscriptionManager.unsubscribe(clientId);
+
+		if (subwrap == null)
+			return false;
+
+		IPv4Address clientAddr = IPv4Address.of(clientId);
+
+		for (DatapathId swId : subwrap.getAttachedSwitches()) {
+			IOFSwitch sw = switchService.getActiveSwitch(swId);
+			if (sw == null)
+				continue;
+			deleteIPFlows(sw, clientAddr, subwrap.getServer());
+	}
+
+		return true;
 	}
 
 	public void sendUnsubscribedError(IOFSwitch sw, OFPacketIn pi, FloodlightContext cntx) {
@@ -471,6 +507,7 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
 		l.add(IFloodlightProviderService.class);
 		l.add(IRestApiService.class);
+		l.add(IOFSwitchService.class);
 		return l;
 	}
 
@@ -484,6 +521,9 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		restApiService = context.getServiceImpl(IRestApiService.class);
 		// Create an empty MacAddresses set
 		macAddresses = new ConcurrentSkipListSet<Long>();
+		switchService = context.getServiceImpl(IOFSwitchService.class);
+		
+		AppCookie.registerApp(APP_ID, DynamicServiceAllocator.class.getSimpleName());
 	}
 
 	/* (non-Javadoc)

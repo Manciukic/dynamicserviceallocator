@@ -1,6 +1,11 @@
 package net.floodlightcontroller.dynamicserviceallocator;
 
 import java.sql.Timestamp;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.projectfloodlight.openflow.types.DatapathId;
 
 /**
  * This class is used to represent a subscription of a specific client, which has a paired server
@@ -11,6 +16,7 @@ public class SubscriptionWrapper {
     private ServerDescriptor server;
     private final int leaseTime;
     private final Timestamp expirationTime;
+    private Set<DatapathId> attachedSwitches = new HashSet<>();
 
     /**
      * Initialize a SubscriptionWrapper with a server and a lease time of validity (in seconds)
@@ -46,6 +52,12 @@ public class SubscriptionWrapper {
         return expirationTime;
     }
 
+    public void addAttachedSwitch(DatapathId switchId){
+        attachedSwitches.add(switchId);
+    }
 
+    public Collection<DatapathId> getAttachedSwitches(){
+        return attachedSwitches;
+    }
 
 }

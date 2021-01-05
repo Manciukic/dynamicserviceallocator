@@ -4,8 +4,7 @@ import java.sql.Timestamp;
 import java.util.*;
 import java.util.concurrent.*;
 
-import org.projectfloodlight.openflow.types.IPv4Address;
-import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.DatapathId;
 
 /**
  * This class implements a manager that provides a subscription service to the other modules.
@@ -114,10 +113,11 @@ public class SubscriptionManager {
      * Unsubscribe a client from the service.
      * @param clientID the client to be unsubscribed.
      */
-    public static boolean unsubscribe(String clientID) {
-        if(subscriptions.get(clientID) == null)
-            return false;
-        ServerDescriptor chosenOne = subscriptions.remove(clientID).getServer();
+    public static SubscriptionWrapper unsubscribe(String clientID) {
+    	if(subscriptions.get(clientID) == null) 
+    		return null;
+        SubscriptionWrapper removedSub = subscriptions.remove(clientID);
+        ServerDescriptor chosenOne = removedSub.getServer();
         chosenOne.unsubscribe();
 
         if(verboseMode) {
@@ -126,7 +126,7 @@ public class SubscriptionManager {
             System.out.println("   Client: " + clientID);
             System.out.println();
         }
-        return true;
+        return removedSub;
     }
 
     /**
@@ -137,6 +137,18 @@ public class SubscriptionManager {
     public static boolean isSubscribed(String clientID) {
         return subscriptions.get(clientID) != null;
     }
+
+    public static Collection<DatapathId> getAttachedSwitches(String clientID){
+        if (subscriptions.get(clientID) != null)
+            return subscriptions.get(clientID).getAttachedSwitches();
+        else
+            return null;
+    }  
+
+    public static void addAttachedSwitch(String clientID, DatapathId switchId){
+        if (subscriptions.get(clientID) != null)
+            subscriptions.get(clientID).addAttachedSwitch(switchId);
+    }  
 
     /**
      * Get the server which a client is subscribed to.
