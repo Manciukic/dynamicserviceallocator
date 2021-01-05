@@ -6,6 +6,7 @@ package net.floodlightcontroller.dynamicserviceallocator;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -68,8 +69,8 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 	private final static MacAddress SERVICE_ALLOCATOR_MAC = MacAddress.of("00:00:00:00:00:fe");
 
 	// Rule timeouts
-	private final static short IDLE_TIMEOUT = 10; // in seconds
-	private final static short HARD_TIMEOUT = 20; // every 20 seconds drop the entry
+	private final static short IDLE_TIMEOUT = 10; // drop entries if not used for 10 seconds
+	// hard timeout will be set depending on expiration
 
 	/*
 	 * (non-Javadoc)
@@ -157,23 +158,27 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 
 		ClientDescriptor clientDes = new ClientDescriptor(clientIP);// , clientMAC);
 
-		ServerDescriptor serverDes;
+		SubscriptionWrapper sub;
 
 		// Check if client is subscribed if not, sends back an error to the client
 		// Return the Descriptor of the server that will handle all requests received
 		// from that specific client
-		if ((serverDes = SubscriptionManager.getSubscriptionServer(clientDes.toString())) == null) {
+		if ((sub = SubscriptionManager.getSubscription(clientDes.toString())) == null) {
 			sendUnsubscribedError(sw, pi, cntx);
 			return;
 		}
 
-		SubscriptionManager.addAttachedSwitch(clientDes.toString(), sw.getId());
+		sub.addAttachedSwitch(sw.getId());
+		ServerDescriptor serverDes = sub.getServer();
 
 		// Create a flow table modification message to add a rule
 		OFFlowAdd.Builder fmb = sw.getOFFactory().buildFlowAdd();
 
-		fmb.setIdleTimeout(IDLE_TIMEOUT);
-		fmb.setHardTimeout(HARD_TIMEOUT);
+		int hardTimeout = (int) Math.ceil((sub.getExpirationTime().getTime() - (new Date()).getTime()) / 1000.0);
+		int idleTimeout = Math.min(hardTimeout, IDLE_TIMEOUT);
+
+		fmb.setIdleTimeout(idleTimeout);
+		fmb.setHardTimeout(hardTimeout);
 		fmb.setBufferId(OFBufferId.NO_BUFFER);
 		fmb.setCookie(AppCookie.makeCookie(APP_ID, clientIP.getInt()));
 		fmb.setPriority(FlowModUtils.PRIORITY_MAX);
@@ -213,8 +218,8 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		// Create a flow table modification message to add a rule
 		OFFlowAdd.Builder fmbRev = sw.getOFFactory().buildFlowAdd();
 
-		fmbRev.setIdleTimeout(IDLE_TIMEOUT);
-		fmbRev.setHardTimeout(HARD_TIMEOUT);
+		fmbRev.setIdleTimeout(idleTimeout);
+		fmbRev.setHardTimeout(hardTimeout);
 		fmbRev.setBufferId(OFBufferId.NO_BUFFER);
 		fmbRev.setCookie(AppCookie.makeCookie(APP_ID, clientIP.getInt()));
 		fmbRev.setPriority(FlowModUtils.PRIORITY_MAX);

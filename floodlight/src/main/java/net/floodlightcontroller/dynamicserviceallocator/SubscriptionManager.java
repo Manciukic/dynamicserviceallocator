@@ -34,7 +34,7 @@ public class SubscriptionManager {
 	/**
 	 * Parameter indicating the default lease time (seconds) for a subscription
 	 */
-    private static final int defaultLeaseTime = 9;
+	private static final int defaultLeaseTime = 90;
 
 	/**
 	 * This attribute maps a client identifier (obtained using toString() method of
@@ -162,11 +162,6 @@ public class SubscriptionManager {
 			return null;
 	}
 
-	public static void addAttachedSwitch(String clientID, DatapathId switchId) {
-		if (subscriptions.get(clientID) != null)
-			subscriptions.get(clientID).addAttachedSwitch(switchId);
-	}
-
 	/**
 	 * Get the server which a client is subscribed to.
 	 * 
@@ -174,9 +169,13 @@ public class SubscriptionManager {
 	 * @return The server paired with the specified client. Return null if the
 	 *         client is not subscribed.
 	 */
-	public static ServerDescriptor getSubscriptionServer(String clientID) {
+	public static SubscriptionWrapper getSubscription(String clientID) {
 		SubscriptionWrapper sub = subscriptions.get(clientID);
-		return (sub == null) ? null : sub.getServer();
+		if (sub != null && sub.getExpirationTime().after(new Date())) {
+			return sub;
+		} else {
+			return null;
+		}
 	}
 
 	/**
