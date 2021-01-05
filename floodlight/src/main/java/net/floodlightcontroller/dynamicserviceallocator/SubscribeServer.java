@@ -1,7 +1,6 @@
 package net.floodlightcontroller.dynamicserviceallocator;
 
 import java.io.IOException;
-import java.util.Map;
 
 import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.MacAddress;
@@ -11,12 +10,10 @@ import org.restlet.resource.ServerResource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * Subscribes a client to the Dynamic Service Allocator.
- * Once subscribed, the client will be assigned a server to handle its 
- * requests.
+ * Subscribes a client to the Dynamic Service Allocator. Once subscribed, the
+ * client will be assigned a server to handle its requests.
  */
 public class SubscribeServer extends ServerResource {
 
@@ -24,13 +21,12 @@ public class SubscribeServer extends ServerResource {
 	public String subscribe(String fmJson) {
 
 		// Check if the payload is provided
-		if(fmJson == null){
+		if (fmJson == null) {
 			setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
 			return new String("Empty payload");
 		}
 
 		// Parse the JSON input
-		//System.out.println("ci provo"); //DEBUG
 		ObjectMapper mapper = new ObjectMapper();
 		try {
 
@@ -40,7 +36,7 @@ public class SubscribeServer extends ServerResource {
 			JsonNode macaddrNode = root.get("server_macaddress");
 			JsonNode port = root.get("service_port");
 
-			if (addrNode == null || macaddrNode == null){
+			if (addrNode == null || macaddrNode == null) {
 				setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
 				return new String("No 'server_address', 'server_macaddress' or 'service_port' fields provided");
 			}
@@ -51,12 +47,13 @@ public class SubscribeServer extends ServerResource {
 			int servicePort = port.asInt();
 			ServerDescriptor servDes = new ServerDescriptor(serverIP, serverMAC, servicePort);
 
-
-			IDynServAllocatorREST dsa = (IDynServAllocatorREST) getContext().getAttributes().get(IDynServAllocatorREST.class.getCanonicalName());
-			if(dsa.addServer(servDes))
+			IDynServAllocatorREST dsa = (IDynServAllocatorREST) getContext().getAttributes()
+					.get(IDynServAllocatorREST.class.getCanonicalName());
+			if (dsa.addServer(servDes))
 				return new String("OK");
 
-			//If addServer returns false then it means that a server with the same IP address was found in the pool
+			// If addServer returns false then it means that a server with the same IP
+			// address was found in the pool
 			setStatus(Status.CLIENT_ERROR_BAD_REQUEST);
 			return new String("This server was already registered");
 
