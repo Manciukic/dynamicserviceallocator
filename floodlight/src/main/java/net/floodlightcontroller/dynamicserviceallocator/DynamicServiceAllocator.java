@@ -176,7 +176,6 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		fmb.setHardTimeout(HARD_TIMEOUT);
 		fmb.setBufferId(OFBufferId.NO_BUFFER);
 		fmb.setCookie(AppCookie.makeCookie(APP_ID, clientIP.getInt()));
-		fmb.setCookieMask(U64.of(0xffffffffffffffffL));
 		fmb.setPriority(FlowModUtils.PRIORITY_MAX);
 
 		// Create the match structure
@@ -217,8 +216,7 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 		fmbRev.setIdleTimeout(IDLE_TIMEOUT);
 		fmbRev.setHardTimeout(HARD_TIMEOUT);
 		fmbRev.setBufferId(OFBufferId.NO_BUFFER);
-		fmb.setCookie(AppCookie.makeCookie(APP_ID, clientIP.getInt()));
-		fmb.setCookieMask(U64.of(0xffffffffffffffffL));
+		fmbRev.setCookie(AppCookie.makeCookie(APP_ID, clientIP.getInt()));
 		fmbRev.setPriority(FlowModUtils.PRIORITY_MAX);
 
 		Match.Builder mbRev = sw.getOFFactory().buildMatch();
