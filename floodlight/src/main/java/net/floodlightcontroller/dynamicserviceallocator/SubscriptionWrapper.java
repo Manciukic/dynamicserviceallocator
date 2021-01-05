@@ -1,7 +1,7 @@
 package net.floodlightcontroller.dynamicserviceallocator;
 
-import java.sql.Timestamp;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -15,7 +15,7 @@ public class SubscriptionWrapper {
 
 	private ServerDescriptor server;
 	private final int leaseTime;
-	private final Timestamp expirationTime;
+	private final Date expirationTime;
 	private Set<DatapathId> attachedSwitches = new HashSet<>();
 
 	/**
@@ -28,7 +28,7 @@ public class SubscriptionWrapper {
 	public SubscriptionWrapper(ServerDescriptor server, int leaseTime) {
 		this.server = server;
 		this.leaseTime = leaseTime;
-		this.expirationTime = new Timestamp(System.currentTimeMillis() + leaseTime * 1000L);
+		this.expirationTime = new Date(System.currentTimeMillis() + leaseTime * 1000L);
 	}
 
 	// this method will be package-private since other packages won't need to access
@@ -48,11 +48,11 @@ public class SubscriptionWrapper {
 	}
 
 	public boolean isExpired() {
-		Timestamp now = new Timestamp(System.currentTimeMillis());
+		Date now = new Date();
 		return now.after(expirationTime);
 	}
 
-	public Timestamp getExpirationTime() {
+	public Date getExpirationTime() {
 		return expirationTime;
 	}
 

@@ -1,9 +1,9 @@
 package net.floodlightcontroller.dynamicserviceallocator;
 
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +93,7 @@ public class SubscriptionManager {
 	/**
 	 * Time at which the last expired subscriptions check has been performed
 	 */
-	private static final Timestamp lastCleansingTime = new Timestamp(System.currentTimeMillis());
+	private static final Date lastCleansingTime = new Date();
 
 	/**
 	 * Subscribe a client to the least busy server.
