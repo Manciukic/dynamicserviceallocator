@@ -517,7 +517,23 @@ public class DynamicServiceAllocator implements IOFMessageListener, IFloodlightM
 
 	@Override
 	public boolean removeServer(ServerDescriptor oldServer) {
-		return SubscriptionManager.removeServer(oldServer);
+		Collection<Map.Entry<String, SubscriptionWrapper>> affectedSubs = SubscriptionManager.removeServer(oldServer);
+
+		if (affectedSubs == null)
+			return false;
+
+		for (Map.Entry<String, SubscriptionWrapper> sub : affectedSubs) {
+			IPv4Address clientAddr = IPv4Address.of(sub.getKey());
+
+			for (DatapathId swId : sub.getValue().getAttachedSwitches()) {
+				IOFSwitch sw = switchService.getActiveSwitch(swId);
+				if (sw == null)
+					continue;
+				deleteIPFlows(sw, clientAddr);
+			}
+		}
+
+		return true;
 	}
 
 }
