@@ -1,7 +1,7 @@
 # Setup instructions for GNS3 emulator
 
 ## Goal
-Setup GNS3 and Floodlight for testing the Virtual IP module.
+Setup GNS3 and Floodlight for testing the DynamicServiceAllocator module.
 
 ## Prerequisites
 
@@ -10,8 +10,7 @@ which includes the following required components:
 1. GNS3 version 2.1.11
 2. Floodlight v1.2 (commit a6c11a)
 
-In addition, you will need the contents of 
-[this repository](https://github.com/Manciukic/dynamicserviceallocator), 
+In addition, you will need the contents of this repository, 
 which includes:
 1. Floodlight patch that adds the DynamicServiceAllocator module
 2. Ready-to-use GNS3 project (optional)
