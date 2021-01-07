@@ -360,9 +360,10 @@ public class SubscriptionManager {
 	 * Remove a server from the pool.
 	 * 
 	 * @param oldServer the descriptor of the server to be removed.
-	 * @return true if the server was removed. False if it does not exist.
+	 * @return collection of affected subscriptions if server is found, null
+	 *         otherwise
 	 */
-	public static boolean removeServer(ServerDescriptor oldServer) {
+	public static Collection<Map.Entry<String, SubscriptionWrapper>> removeServer(ServerDescriptor oldServer) {
 		Iterator<ServerDescriptor> i = servers.iterator();
 		boolean foundIt = false;
 		while (i.hasNext()) {
@@ -389,9 +390,12 @@ public class SubscriptionManager {
 					oldServer.unsubscribe();
 				}
 			}
+
+			// pass down list of subscriptions to handle client redirection
+			return subscriptions.entrySet();
 		}
 
-		return foundIt;
+		return null;
 	}
 
 }
