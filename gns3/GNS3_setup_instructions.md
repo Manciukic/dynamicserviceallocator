@@ -146,7 +146,7 @@ SERVICE_PORT=80
 ```
 
 #### Ready-to-use project
-A ready-to-use GNS3 project implemented using the tutorial in the next section is provided 
+A ready-to-use GNS3 project implemented using the tutorial in the previous section is provided 
 in the local repository. To make it work, follow these simple steps:
  
 1. Open the project with GNS3.
