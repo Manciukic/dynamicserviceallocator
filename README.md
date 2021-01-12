@@ -16,3 +16,7 @@ set up GNS3 and Floodlight to test it out.
         the GNS3 simulation demonstrating the module functionality. 
  - `assignment.pdf` describes the project
  
+ ## Authors
+ - Leonardo Bacciottino [@baccios](https://github.com/baccios)
+ - Filippo Guggino [@gugginos](https://github.com/gugginos)
+ - Riccardo Mancini [@manciukic](https://github.com/manciukic)
