@@ -17,6 +17,6 @@ set up GNS3 and Floodlight to test it out.
  - `assignment.pdf` describes the project
  
  ## Authors
- - Leonardo Bacciottino [@baccios](https://github.com/baccios)
+ - Leonardo Bacciottini [@baccios](https://github.com/baccios)
  - Filippo Guggino [@gugginos](https://github.com/gugginos)
  - Riccardo Mancini [@manciukic](https://github.com/manciukic)
